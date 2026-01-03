@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Subject, StudentTab, SystemSettings, CreditPackage, WeeklyTest, Chapter, BoardNote } from '../types';
+import { User, Subject, StudentTab, SystemSettings, CreditPackage, WeeklyTest, Chapter } from '../types';
 import { updateUserStatus, db, saveUserToLive, getChapterData } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getSubjectsList } from '../constants';
@@ -21,7 +21,7 @@ import { LoadingOverlay } from './LoadingOverlay';
 import { CreditConfirmationModal } from './CreditConfirmationModal';
 import { UserGuide } from './UserGuide';
 import { SyllabusStructure } from './SyllabusStructure';
-import { BoardNoteViewer } from './BoardNoteViewer';
+
 import { CustomAlert } from './CustomDialogs';
 import { AnalyticsPage } from './AnalyticsPage';
 
@@ -57,74 +57,9 @@ export const StudentDashboard: React.FC<Props> = ({ user, dailyStudySeconds, onS
   const [sessionContentSelection, setSeasonContentSelection] = useState<{chapter: Chapter, subject: Subject} | null>(null);
   const [returnTab, setReturnToTab] = useState<StudentTab | null>(null);
 
-  // BOARD EXAM STATE
-  const [boardNotes, setBoardNotes] = useState<BoardNote[]>([]);
-  const [margdarshanNotes, setMargdarshanNotes] = useState<BoardNote[]>([]);
-  const [activeBoardNote, setActiveBoardNote] = useState<BoardNote | null>(null);
 
-  useEffect(() => {
-      const stored = localStorage.getItem('nst_board_notes');
-      if (stored) {
-          setBoardNotes(JSON.parse(stored));
-      }
-      const storedMarg = localStorage.getItem('nst_margdarshan_notes');
-      if (storedMarg) {
-          setMargdarshanNotes(JSON.parse(storedMarg));
-      }
-  }, []);
 
-  const handleOpenBoardNote = (note: BoardNote) => {
-      // Filter for class relevance (optional visual check, but enforced here)
-      // if (user.classLevel !== note.classLevel) ... maybe warning? but let them open if they pay.
-      
-      const isSubscribed = user.subscriptionTier && user.subscriptionTier !== 'FREE';
-      
-      if (note.isPremium && !isSubscribed) {
-          // If Price is 0 but Premium -> Sub Only
-          if (note.price === 0) {
-              showAlert("🔒 Premium Subscription Required!", 'ERROR');
-              return;
-          }
-          
-          // Pay with Coins
-          if (user.credits < note.price) {
-              showAlert(`🔒 Need ${note.price} Coins to unlock!`, 'ERROR');
-              return;
-          }
-          
-          if (!confirm(`Unlock "${note.title}" for ${note.price} Coins?`)) return;
-          
-          // Deduct
-          const updatedUser = { ...user, credits: user.credits - note.price };
-          handleUserUpdate(updatedUser);
-          showAlert(`Unlocked for ${note.price} Coins!`, 'SUCCESS');
-      }
-      
-      setActiveBoardNote(note);
-      setFullScreen(true);
-  };
 
-  const handleCompleteRoutine = () => {
-      if (!activeBoardNote) return;
-      
-      const currentCompleted = user.completedBoardNotes || [];
-      const isCompleted = currentCompleted.includes(activeBoardNote.id);
-      
-      let updatedList;
-      if (isCompleted) {
-          updatedList = currentCompleted; // No toggle off for now, or maybe? "Routine Tracker" implies once done is done.
-          // Prompt implies check "I completed". 
-          // Let's allow toggle off if needed or just keep it checked.
-          // Let's assume toggle.
-          updatedList = currentCompleted.filter(id => id !== activeBoardNote.id);
-      } else {
-          updatedList = [...currentCompleted, activeBoardNote.id];
-          showAlert("Routine Completed! ✅", 'SUCCESS');
-      }
-      
-      const updatedUser = { ...user, completedBoardNotes: updatedList };
-      handleUserUpdate(updatedUser);
-  };
 
   // GENERIC CONTENT FLOW STATE (Used for Video, PDF, MCQ)
   const [contentViewStep, setContentViewStep] = useState<'SUBJECTS' | 'CHAPTERS' | 'PLAYER'>('SUBJECTS');
@@ -708,8 +643,7 @@ export const StudentDashboard: React.FC<Props> = ({ user, dailyStudySeconds, onS
                                       { id: 'MCQ', label: 'Tests', icon: CheckSquare, color: 'text-purple-500', bg: 'bg-purple-50', hover: 'group-hover:bg-purple-500' },
                                       { id: 'STORE', label: 'Premium', icon: Crown, color: 'text-yellow-500', bg: 'bg-yellow-50', hover: 'group-hover:bg-yellow-500' },
                                       { id: 'LEADERBOARD', label: 'Rank List', icon: Trophy, color: 'text-orange-500', bg: 'bg-orange-50', hover: 'group-hover:bg-orange-500' },
-                                      { id: 'BOARD_EXAM', label: 'Board Spl', icon: BookOpenText, color: 'text-red-600', bg: 'bg-red-50', hover: 'group-hover:bg-red-600' },
-                                      { id: 'MARGDARSHAN', label: 'Guidance', icon: Crown, color: 'text-orange-500', bg: 'bg-orange-50', hover: 'group-hover:bg-orange-500' },
+
                                       { id: 'GAME', label: 'Spin Win', icon: Gamepad2, color: 'text-pink-500', bg: 'bg-pink-50', hover: 'group-hover:bg-pink-500' },
                                       { id: 'PROFILE', label: 'Profile', icon: UserIcon, color: 'text-slate-500', bg: 'bg-slate-100', hover: 'group-hover:bg-slate-600' },
                                       { id: 'ANALYTICS', label: 'Report', icon: Trophy, color: 'text-indigo-500', bg: 'bg-indigo-50', hover: 'group-hover:bg-indigo-500' },
@@ -835,70 +769,7 @@ export const StudentDashboard: React.FC<Props> = ({ user, dailyStudySeconds, onS
           );
       }
 
-      // 3.6 MARGDARSHAN TAB
-      if (activeTab === 'MARGDARSHAN') {
-          const filteredNotes = margdarshanNotes.filter(n => n.classLevel === user.classLevel);
-          return (
-              <div className="space-y-4 pb-24">
-                  <div className="bg-orange-500 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
-                      <div className="relative z-10">
-                          <div className="inline-block px-3 py-1 bg-white/20 rounded-full text-[10px] font-black tracking-widest mb-2 backdrop-blur-md">
-                              ✨ GUIDANCE
-                          </div>
-                          <h2 className="text-2xl font-black mb-1">Margdarshan</h2>
-                          <p className="text-white/80 text-xs">Expert Strategy & Mentorship for Class {user.classLevel}</p>
-                      </div>
-                      <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-                  </div>
 
-                  {filteredNotes.length === 0 ? (
-                      <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-slate-300">
-                          <p className="text-slate-400 font-bold">No guidance notes available for Class {user.classLevel} yet.</p>
-                      </div>
-                  ) : (
-                      <div className="grid gap-3">
-                          {filteredNotes.map(note => {
-                              const isCompleted = user.completedBoardNotes?.includes(note.id);
-                              return (
-                                  <button 
-                                      key={note.id}
-                                      onClick={() => handleOpenBoardNote(note)}
-                                      className={`bg-white p-4 rounded-2xl border transition-all text-left relative overflow-hidden ${isCompleted ? 'border-green-300 shadow-green-100' : 'border-slate-200 shadow-sm'}`}
-                                  >
-                                      {/* Completion Ribbon */}
-                                      {isCompleted && (
-                                          <div className="absolute top-0 right-0 bg-green-500 text-white text-[9px] font-bold px-2 py-1 rounded-bl-xl">
-                                              ✅ READ
-                                          </div>
-                                      )}
-                                      
-                                      <div className="flex justify-between items-start mb-2">
-                                          <div>
-                                              <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded mb-1 inline-block uppercase">{note.subject}</span>
-                                              <h3 className="font-bold text-slate-800 text-sm leading-tight">{note.title}</h3>
-                                          </div>
-                                          {note.isPremium && (!user.subscriptionTier || user.subscriptionTier === 'FREE') && !isCompleted && (
-                                              <Lock size={16} className="text-slate-400" />
-                                          )}
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-2 mt-2">
-                                          {note.isPremium ? (
-                                              <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
-                                                  {note.price > 0 ? `💎 ${note.price} Coins` : '👑 PRO ONLY'}
-                                              </span>
-                                          ) : (
-                                              <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded">FREE</span>
-                                          )}
-                                      </div>
-                                  </button>
-                              );
-                          })}
-                      </div>
-                  )}
-              </div>
-          );
-      }
 
       // 2. COURSES TAB (Handles Video, Notes, MCQ Selection)
       if (activeTab === 'COURSES') {
@@ -963,70 +834,7 @@ export const StudentDashboard: React.FC<Props> = ({ user, dailyStudySeconds, onS
           );
       }
 
-      // 3.5 BOARD EXAM TAB
-      if (activeTab === 'BOARD_EXAM') {
-          const filteredNotes = boardNotes.filter(n => n.classLevel === user.classLevel);
-          return (
-              <div className="space-y-4 pb-24">
-                  <div className="bg-red-600 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
-                      <div className="relative z-10">
-                          <div className="inline-block px-3 py-1 bg-white/20 rounded-full text-[10px] font-black tracking-widest mb-2 backdrop-blur-md">
-                              🔥 ULTRA FEATURE
-                          </div>
-                          <h2 className="text-2xl font-black mb-1">Board Exam Special</h2>
-                          <p className="text-white/80 text-xs">Exam Ready Structured Notes for Class {user.classLevel}</p>
-                      </div>
-                      <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-                  </div>
 
-                  {filteredNotes.length === 0 ? (
-                      <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-slate-300">
-                          <p className="text-slate-400 font-bold">No notes available for Class {user.classLevel} yet.</p>
-                      </div>
-                  ) : (
-                      <div className="grid gap-3">
-                          {filteredNotes.map(note => {
-                              const isCompleted = user.completedBoardNotes?.includes(note.id);
-                              return (
-                                  <button 
-                                      key={note.id}
-                                      onClick={() => handleOpenBoardNote(note)}
-                                      className={`bg-white p-4 rounded-2xl border transition-all text-left relative overflow-hidden ${isCompleted ? 'border-green-300 shadow-green-100' : 'border-slate-200 shadow-sm'}`}
-                                  >
-                                      {/* Completion Ribbon */}
-                                      {isCompleted && (
-                                          <div className="absolute top-0 right-0 bg-green-500 text-white text-[9px] font-bold px-2 py-1 rounded-bl-xl">
-                                              ✅ DONE
-                                          </div>
-                                      )}
-                                      
-                                      <div className="flex justify-between items-start mb-2">
-                                          <div>
-                                              <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded mb-1 inline-block uppercase">{note.subject}</span>
-                                              <h3 className="font-bold text-slate-800 text-sm leading-tight">{note.title}</h3>
-                                          </div>
-                                          {note.isPremium && (!user.subscriptionTier || user.subscriptionTier === 'FREE') && !isCompleted && (
-                                              <Lock size={16} className="text-slate-400" />
-                                          )}
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-2 mt-2">
-                                          {note.isPremium ? (
-                                              <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
-                                                  {note.price > 0 ? `💎 ${note.price} Coins` : '👑 PRO ONLY'}
-                                              </span>
-                                          ) : (
-                                              <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded">FREE</span>
-                                          )}
-                                      </div>
-                                  </button>
-                              );
-                          })}
-                      </div>
-                  )}
-              </div>
-          );
-      }
 
       // 4. LEGACY TABS (Mapped to new structure or kept as sub-views)
       if (activeTab === 'ANALYTICS') return <AnalyticsPage user={user} onBack={() => onTabChange('HOME')} />;
@@ -1163,19 +971,6 @@ export const StudentDashboard: React.FC<Props> = ({ user, dailyStudySeconds, onS
                     </div>
                 </div>
             </div>
-        )}
-
-        {/* BOARD NOTE VIEWER OVERLAY */}
-        {activeBoardNote && (
-            <BoardNoteViewer 
-                note={activeBoardNote}
-                isCompleted={!!user.completedBoardNotes?.includes(activeBoardNote.id)}
-                onToggleComplete={handleCompleteRoutine}
-                onClose={() => {
-                    setActiveBoardNote(null);
-                    setFullScreen(false);
-                }}
-            />
         )}
 
         {/* REQUEST CONTENT MODAL */}
